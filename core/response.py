@@ -1,7 +1,7 @@
 import gzip
 import io
-import socket
 import time
+from http import HTTPStatus
 from typing import Dict, Any, Optional
 from utils.helpers import parse_size
 
@@ -32,15 +32,10 @@ class ResponseGenerator:
         return f"HTTP/1.1 {status} {reason}\r\n"
     
     def _get_reason_phrase(self, status: int) -> str:
-        phrases = {
-            200: 'OK', 201: 'Created', 204: 'No Content',
-            301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
-            400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden',
-            404: 'Not Found', 405: 'Method Not Allowed', 408: 'Request Timeout',
-            500: 'Internal Server Error', 502: 'Bad Gateway',
-            503: 'Service Unavailable', 504: 'Gateway Timeout'
-        }
-        return phrases.get(status, 'Unknown')
+        try:
+            return HTTPStatus(status).phrase
+        except ValueError:
+            return 'Unknown'
     
     def _build_headers(self) -> str:
         headers = self.config.get('headers', {})
@@ -53,7 +48,7 @@ class ResponseGenerator:
         for custom in custom_headers:
             header_lines += f"{custom}\r\n"
         
-        if 'Content-Length' not in headers and not self.config.get('chunked'):
+        if 'Content-Length' not in headers and self.config.get('type') not in ('chunked', 'large'):
             body = self._get_body()
             header_lines += f"Content-Length: {len(body)}\r\n"
         
@@ -86,6 +81,9 @@ class ResponseGenerator:
         
         if not headers.endswith('\r\n'):
             headers += '\r\n'
+        
+        if delay > 0:
+            time.sleep(delay)
         
         response = (status_line + headers + '\r\n').encode('utf-8')
         handler.wfile.write(response)
@@ -165,9 +163,7 @@ class ResponseGenerator:
         
         status_line = self._build_status_line()
         headers = self._build_headers()
-        
-        if 'Content-Length' not in self.config.get('headers', {}):
-            headers += f"Content-Length: {size}\r\n"
+        headers += f"Content-Length: {size}\r\n"
         
         if not headers.endswith('\r\n'):
             headers += '\r\n'
