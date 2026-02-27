@@ -29,9 +29,3 @@ class Router:
             params.update(match.groupdict())
             return True
         return False
-    
-    def get_route_by_id(self, route_id: str) -> Optional[Dict[str, Any]]:
-        for route in self.routes:
-            if route.get('id') == route_id:
-                return route
-        return None

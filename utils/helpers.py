@@ -1,8 +1,8 @@
-import time
 import re
 from datetime import datetime
+from typing import Optional, Tuple
 
-def format_log(level: str, message: str, client_addr: tuple = None) -> str:
+def format_log(level: str, message: str, client_addr: Optional[Tuple[str, int]] = None) -> str:
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     client = f"{client_addr[0]}:{client_addr[1]}" if client_addr else "-"
     return f"[{timestamp}] [{level}] [{client}] {message}"

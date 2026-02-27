@@ -1,8 +1,5 @@
 import time
-import socket
-import struct
-from typing import Dict, Any
-from utils.helpers import parse_size
+from typing import Dict, Any, Optional
 
 class SpecialHandlers:
     def __init__(self, route_config: Dict[str, Any], logger=None):
@@ -31,20 +28,47 @@ class SpecialHandlers:
         
         return False
     
+    def _build_response(self, body: str, status: int = 200, 
+                        extra_headers: Optional[Dict[str, str]] = None,
+                        http_version: str = "HTTP/1.1") -> bytes:
+        status_line = f"{http_version} {status} {self._get_reason_phrase(status)}\r\n"
+        
+        headers = "Content-Type: text/plain\r\n"
+        headers += f"Content-Length: {len(body)}\r\n"
+        
+        if extra_headers:
+            for key, value in extra_headers.items():
+                headers += f"{key}: {value}\r\n"
+        
+        response = status_line + headers + "\r\n" + body
+        return response.encode('utf-8')
+    
+    def _get_reason_phrase(self, status: int) -> str:
+        phrases = {
+            200: 'OK', 201: 'Created', 204: 'No Content',
+            301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified',
+            400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden',
+            404: 'Not Found', 405: 'Method Not Allowed', 408: 'Request Timeout',
+            500: 'Internal Server Error', 502: 'Bad Gateway',
+            503: 'Service Unavailable', 504: 'Gateway Timeout'
+        }
+        return phrases.get(status, 'Unknown')
+    
+    def _send_response(self, handler, response: bytes):
+        try:
+            handler.wfile.write(response)
+            handler.wfile.flush()
+        except Exception as e:
+            if self.logger:
+                self.logger.warning(f"Failed to send response: {e}")
+    
     def _ignore_connection_close(self, handler) -> bool:
         timeout = self.config.get('timeout', 30)
-        
         status = self.config.get('status', 200)
         body = self.config.get('body', 'Response sent, but connection will be held')
         
-        response = f"HTTP/1.1 {status} OK\r\n"
-        response += "Content-Type: text/plain\r\n"
-        response += f"Content-Length: {len(body)}\r\n"
-        response += "\r\n"
-        response += body
-        
-        handler.wfile.write(response.encode('utf-8'))
-        handler.wfile.flush()
+        response = self._build_response(body, status)
+        self._send_response(handler, response)
         
         if self.logger:
             self.logger.info(f"Ignoring Connection: close, waiting {timeout}s before closing")
@@ -57,25 +81,23 @@ class SpecialHandlers:
         drop_after_time = self.config.get('drop_after_time', 0)
         
         if drop_after_time > 0:
-            time.sleep(drop_after_time)
             if self.logger:
-                self.logger.info(f"Dropping connection after {drop_after_time}s")
+                self.logger.info(f"Waiting {drop_after_time}s then dropping connection")
+            time.sleep(drop_after_time)
             return True
         
         if drop_after_bytes > 0:
             status = self.config.get('status', 200)
             body = 'A' * drop_after_bytes
+            declared_length = self.config.get('declared_length', drop_after_bytes)
             
-            response = f"HTTP/1.1 {status} OK\r\n"
-            response += f"Content-Length: {drop_after_bytes * 10}\r\n"
-            response += "\r\n"
-            response += body
-            
-            handler.wfile.write(response.encode('utf-8'))
-            handler.wfile.flush()
+            status_line = f"HTTP/1.1 {status} OK\r\n"
+            response = f"{status_line}Content-Length: {declared_length}\r\n\r\n{body}"
             
             if self.logger:
-                self.logger.info(f"Dropping connection after {drop_after_bytes} bytes")
+                self.logger.info(f"Sending {drop_after_bytes} bytes, declared {declared_length}, then dropping")
+            
+            self._send_response(handler, response.encode('utf-8'))
             return True
         
         return True
@@ -86,42 +108,35 @@ class SpecialHandlers:
             self.logger.info(f"Waiting {timeout}s before any response")
         time.sleep(timeout)
         
-        status = self.config.get('status', 200)
         body = self.config.get('body', 'Finally responded')
-        response = f"HTTP/1.1 {status} OK\r\n"
-        response += f"Content-Length: {len(body)}\r\n"
-        response += "\r\n"
-        response += body
-        
-        handler.wfile.write(response.encode('utf-8'))
-        handler.wfile.flush()
+        status = self.config.get('status', 200)
+        response = self._build_response(body, status)
+        self._send_response(handler, response)
         return True
     
     def _partial_response(self, handler) -> bool:
         send_bytes = self.config.get('send_bytes', 10)
-        
         status = self.config.get('status', 200)
         status_line = f"HTTP/1.1 {status} OK\r\n"
         
         partial = status_line[:send_bytes]
-        handler.wfile.write(partial.encode('utf-8'))
-        handler.wfile.flush()
         
         if self.logger:
             self.logger.info(f"Sent {send_bytes} bytes then dropping")
+        
+        try:
+            handler.wfile.write(partial.encode('utf-8'))
+            handler.wfile.flush()
+        except Exception:
+            pass
         return True
     
     def _no_content_length(self, handler) -> bool:
         status = self.config.get('status', 200)
         body = self.config.get('body', 'No content length header')
         
-        response = f"HTTP/1.1 {status} OK\r\n"
-        response += "Content-Type: text/plain\r\n"
-        response += "\r\n"
-        response += body
-        
-        handler.wfile.write(response.encode('utf-8'))
-        handler.wfile.flush()
+        response = f"HTTP/1.1 {status} OK\r\nContent-Type: text/plain\r\n\r\n{body}"
+        self._send_response(handler, response.encode('utf-8'))
         
         if self.logger:
             self.logger.info("Sent response without Content-Length")
@@ -132,13 +147,8 @@ class SpecialHandlers:
         body = self.config.get('body', 'Body content')
         declared_length = self.config.get('declared_length', 1000)
         
-        response = f"HTTP/1.1 {status} OK\r\n"
-        response += f"Content-Length: {declared_length}\r\n"
-        response += "\r\n"
-        response += body
-        
-        handler.wfile.write(response.encode('utf-8'))
-        handler.wfile.flush()
+        response = f"HTTP/1.1 {status} OK\r\nContent-Length: {declared_length}\r\n\r\n{body}"
+        self._send_response(handler, response.encode('utf-8'))
         
         if self.logger:
             self.logger.info(f"Declared Content-Length: {declared_length}, actual: {len(body)}")
@@ -148,14 +158,8 @@ class SpecialHandlers:
         status = self.config.get('status', 200)
         body = self.config.get('body', 'HTTP/1.0 response')
         
-        response = f"HTTP/1.0 {status} OK\r\n"
-        response += "Content-Type: text/plain\r\n"
-        response += f"Content-Length: {len(body)}\r\n"
-        response += "\r\n"
-        response += body
-        
-        handler.wfile.write(response.encode('utf-8'))
-        handler.wfile.flush()
+        response = self._build_response(body, status, http_version="HTTP/1.0")
+        self._send_response(handler, response)
         return True
     
     def _connection_header_test(self, handler) -> bool:
@@ -165,21 +169,14 @@ class SpecialHandlers:
         status = self.config.get('status', 200)
         body = self.config.get('body', f'Client sent Connection: {client_connection}')
         
-        response = f"HTTP/1.1 {status} OK\r\n"
-        response += f"Content-Length: {len(body)}\r\n"
-        
-        if behavior == 'ignore':
-            pass
-        elif behavior == 'force_close':
-            response += "Connection: close\r\n"
+        extra_headers = {}
+        if behavior == 'force_close':
+            extra_headers['Connection'] = 'close'
         elif behavior == 'force_keepalive':
-            response += "Connection: keep-alive\r\n"
+            extra_headers['Connection'] = 'keep-alive'
         
-        response += "\r\n"
-        response += body
-        
-        handler.wfile.write(response.encode('utf-8'))
-        handler.wfile.flush()
+        response = self._build_response(body, status, extra_headers)
+        self._send_response(handler, response)
         
         hold_time = self.config.get('hold_time', 0)
         if hold_time > 0:

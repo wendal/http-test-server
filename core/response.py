@@ -1,8 +1,5 @@
-import gzip
-import io
-import socket
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from utils.helpers import parse_size
 
 class ResponseGenerator:
@@ -42,7 +39,7 @@ class ResponseGenerator:
         }
         return phrases.get(status, 'Unknown')
     
-    def _build_headers(self) -> str:
+    def _build_headers(self, add_content_length: bool = True) -> str:
         headers = self.config.get('headers', {})
         custom_headers = self.config.get('custom_headers', [])
         
@@ -53,7 +50,7 @@ class ResponseGenerator:
         for custom in custom_headers:
             header_lines += f"{custom}\r\n"
         
-        if 'Content-Length' not in headers and not self.config.get('chunked'):
+        if add_content_length and 'Content-Length' not in headers and not self.config.get('chunked'):
             body = self._get_body()
             header_lines += f"Content-Length: {len(body)}\r\n"
         
@@ -164,10 +161,9 @@ class ResponseGenerator:
         pattern = self.config.get('pattern', 'A')
         
         status_line = self._build_status_line()
-        headers = self._build_headers()
+        headers = self._build_headers(add_content_length=False)
         
-        if 'Content-Length' not in self.config.get('headers', {}):
-            headers += f"Content-Length: {size}\r\n"
+        headers += f"Content-Length: {size}\r\n"
         
         if not headers.endswith('\r\n'):
             headers += '\r\n'
