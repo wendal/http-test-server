@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 class ConfigLoader:
     def __init__(self, config_path: str):
@@ -11,8 +11,11 @@ class ConfigLoader:
     def load(self) -> bool:
         if not os.path.exists(self.config_path):
             return False
-        with open(self.config_path, 'r', encoding='utf-8') as f:
-            self.config = json.load(f)
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                self.config = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return False
         self.routes = self.config.get('routes', [])
         self.server = self.config.get('server', {})
         return True
@@ -27,7 +30,7 @@ class ConfigLoader:
             'log_level': self.server.get('log_level', 'INFO')
         }
     
-    def get_route_by_id(self, route_id: str) -> Dict[str, Any] | None:
+    def get_route_by_id(self, route_id: str) -> Optional[Dict[str, Any]]:
         for route in self.routes:
             if route.get('id') == route_id:
                 return route

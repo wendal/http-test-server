@@ -6,6 +6,8 @@ class Router:
         self.routes = routes
         
     def match(self, path: str, method: str = 'GET') -> Optional[Tuple[Dict[str, Any], Dict[str, str]]]:
+        # Strip query string before matching
+        path = path.split('?', 1)[0]
         for route in self.routes:
             route_path = route.get('path', '')
             route_methods = route.get('methods', ['GET'])

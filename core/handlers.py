@@ -1,8 +1,13 @@
 import time
-import socket
-import struct
+from http import HTTPStatus
 from typing import Dict, Any
 from utils.helpers import parse_size
+
+def _reason(status: int) -> str:
+    try:
+        return HTTPStatus(status).phrase
+    except ValueError:
+        return 'Unknown'
 
 class SpecialHandlers:
     def __init__(self, route_config: Dict[str, Any], logger=None):
@@ -37,7 +42,7 @@ class SpecialHandlers:
         status = self.config.get('status', 200)
         body = self.config.get('body', 'Response sent, but connection will be held')
         
-        response = f"HTTP/1.1 {status} OK\r\n"
+        response = f"HTTP/1.1 {status} {_reason(status)}\r\n"
         response += "Content-Type: text/plain\r\n"
         response += f"Content-Length: {len(body)}\r\n"
         response += "\r\n"
@@ -66,7 +71,7 @@ class SpecialHandlers:
             status = self.config.get('status', 200)
             body = 'A' * drop_after_bytes
             
-            response = f"HTTP/1.1 {status} OK\r\n"
+            response = f"HTTP/1.1 {status} {_reason(status)}\r\n"
             response += f"Content-Length: {drop_after_bytes * 10}\r\n"
             response += "\r\n"
             response += body
@@ -88,7 +93,7 @@ class SpecialHandlers:
         
         status = self.config.get('status', 200)
         body = self.config.get('body', 'Finally responded')
-        response = f"HTTP/1.1 {status} OK\r\n"
+        response = f"HTTP/1.1 {status} {_reason(status)}\r\n"
         response += f"Content-Length: {len(body)}\r\n"
         response += "\r\n"
         response += body
@@ -101,7 +106,7 @@ class SpecialHandlers:
         send_bytes = self.config.get('send_bytes', 10)
         
         status = self.config.get('status', 200)
-        status_line = f"HTTP/1.1 {status} OK\r\n"
+        status_line = f"HTTP/1.1 {status} {_reason(status)}\r\n"
         
         partial = status_line[:send_bytes]
         handler.wfile.write(partial.encode('utf-8'))
@@ -115,7 +120,7 @@ class SpecialHandlers:
         status = self.config.get('status', 200)
         body = self.config.get('body', 'No content length header')
         
-        response = f"HTTP/1.1 {status} OK\r\n"
+        response = f"HTTP/1.1 {status} {_reason(status)}\r\n"
         response += "Content-Type: text/plain\r\n"
         response += "\r\n"
         response += body
@@ -132,7 +137,7 @@ class SpecialHandlers:
         body = self.config.get('body', 'Body content')
         declared_length = self.config.get('declared_length', 1000)
         
-        response = f"HTTP/1.1 {status} OK\r\n"
+        response = f"HTTP/1.1 {status} {_reason(status)}\r\n"
         response += f"Content-Length: {declared_length}\r\n"
         response += "\r\n"
         response += body
@@ -148,7 +153,7 @@ class SpecialHandlers:
         status = self.config.get('status', 200)
         body = self.config.get('body', 'HTTP/1.0 response')
         
-        response = f"HTTP/1.0 {status} OK\r\n"
+        response = f"HTTP/1.0 {status} {_reason(status)}\r\n"
         response += "Content-Type: text/plain\r\n"
         response += f"Content-Length: {len(body)}\r\n"
         response += "\r\n"
@@ -165,7 +170,7 @@ class SpecialHandlers:
         status = self.config.get('status', 200)
         body = self.config.get('body', f'Client sent Connection: {client_connection}')
         
-        response = f"HTTP/1.1 {status} OK\r\n"
+        response = f"HTTP/1.1 {status} {_reason(status)}\r\n"
         response += f"Content-Length: {len(body)}\r\n"
         
         if behavior == 'ignore':
