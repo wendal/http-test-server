@@ -1,0 +1,192 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "log_level": "INFO"
+    },
+    "routes": [
+        {
+            "id": "R001",
+            "path": "/normal",
+            "methods": ["GET"],
+            "status": 200,
+            "body": "Hello, World!",
+            "headers": {
+                "Content-Type": "text/plain"
+            }
+        },
+        {
+            "id": "R002",
+            "path": "/ignore-connection-close",
+            "methods": ["GET", "POST"],
+            "handler_type": "ignore_connection_close",
+            "timeout": 30,
+            "body": "Response sent, but connection will be held for 30 seconds",
+            "description": "Ignores Connection: close header, holds connection after response"
+        },
+        {
+            "id": "R003",
+            "path": "/timeout-before-response",
+            "methods": ["GET"],
+            "handler_type": "timeout_before_response",
+            "timeout": 60,
+            "body": "Finally responded after 60 seconds",
+            "description": "Waits 60 seconds before sending any response"
+        },
+        {
+            "id": "R004",
+            "path": "/duplicate-content-length",
+            "methods": ["GET"],
+            "type": "malformed",
+            "malformed_type": "duplicate_content_length",
+            "content_lengths": [100, 200],
+            "body": "This is a response with duplicate Content-Length headers",
+            "description": "Returns multiple Content-Length headers"
+        },
+        {
+            "id": "R005",
+            "path": "/slow-chunked",
+            "methods": ["GET"],
+            "type": "chunked",
+            "chunks": ["Hello", " ", "World", "! ", "This", " ", "is", " ", "slow", "."],
+            "chunk_delay": 0.5,
+            "description": "Chunked transfer with 0.5s delay between chunks"
+        },
+        {
+            "id": "R006",
+            "path": "/drop-after-bytes",
+            "methods": ["GET"],
+            "handler_type": "drop_connection",
+            "drop_after_bytes": 50,
+            "description": "Drops connection after sending 50 bytes"
+        },
+        {
+            "id": "R007",
+            "path": "/drop-after-time",
+            "methods": ["GET"],
+            "handler_type": "drop_connection",
+            "drop_after_time": 5,
+            "description": "Drops connection after 5 seconds without response"
+        },
+        {
+            "id": "R008",
+            "path": "/partial-response",
+            "methods": ["GET"],
+            "handler_type": "partial_response",
+            "send_bytes": 15,
+            "description": "Sends only 15 bytes then drops"
+        },
+        {
+            "id": "R009",
+            "path": "/no-content-length",
+            "methods": ["GET"],
+            "handler_type": "no_content_length",
+            "body": "Response without Content-Length header",
+            "description": "Response without Content-Length header"
+        },
+        {
+            "id": "R010",
+            "path": "/wrong-content-length",
+            "methods": ["GET"],
+            "handler_type": "wrong_content_length",
+            "body": "Short body",
+            "declared_length": 1000,
+            "description": "Content-Length header does not match actual body length"
+        },
+        {
+            "id": "R011",
+            "path": "/large-response",
+            "methods": ["GET"],
+            "type": "large",
+            "body_size": "10MB",
+            "pattern": "A",
+            "description": "Returns 10MB response"
+        },
+        {
+            "id": "R012",
+            "path": "/status/{code}",
+            "methods": ["GET"],
+            "status": 500,
+            "body": "Internal Server Error",
+            "description": "Returns specified status code"
+        },
+        {
+            "id": "R013",
+            "path": "/http10",
+            "methods": ["GET"],
+            "handler_type": "http10_response",
+            "body": "HTTP/1.0 style response",
+            "description": "Returns HTTP/1.0 response"
+        },
+        {
+            "id": "R014",
+            "path": "/slow-response",
+            "methods": ["GET"],
+            "type": "slow",
+            "delay": 5,
+            "chunk_size": 10,
+            "chunk_delay": 1,
+            "body": "This is a slow response sent in small chunks with delays",
+            "description": "Slow response with chunked delays"
+        },
+        {
+            "id": "R015",
+            "path": "/connection-test",
+            "methods": ["GET"],
+            "handler_type": "connection_header_test",
+            "behavior": "ignore",
+            "hold_time": 30,
+            "body": "Testing connection header behavior",
+            "description": "Tests client Connection header, holds for 30s"
+        },
+        {
+            "id": "R016",
+            "path": "/invalid-header",
+            "methods": ["GET"],
+            "type": "malformed",
+            "malformed_type": "invalid_header",
+            "invalid_headers": ["X-Bad-Header: value with\\x00null"],
+            "body": "Response with invalid header",
+            "description": "Returns response with malformed headers"
+        },
+        {
+            "id": "R017",
+            "path": "/no-status-line",
+            "methods": ["GET"],
+            "type": "malformed",
+            "malformed_type": "no_status_line",
+            "body": "Response without status line",
+            "description": "Returns response without HTTP status line"
+        },
+        {
+            "id": "R018",
+            "path": "/missing-header-end",
+            "methods": ["GET"],
+            "type": "malformed",
+            "malformed_type": "missing_header_end",
+            "description": "Missing \\r\\n\\r\\n at end of headers"
+        },
+        {
+            "id": "R019",
+            "path": "/redirect",
+            "methods": ["GET"],
+            "status": 302,
+            "headers": {
+                "Location": "/normal"
+            },
+            "body": "Redirecting...",
+            "description": "302 redirect to /normal"
+        },
+        {
+            "id": "R020",
+            "path": "/auth/basic",
+            "methods": ["GET"],
+            "status": 401,
+            "headers": {
+                "WWW-Authenticate": "Basic realm=\"Test\""
+            },
+            "body": "Authentication required",
+            "description": "Basic authentication challenge"
+        }
+    ]
+}
